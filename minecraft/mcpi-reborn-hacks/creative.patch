@@ -1,0 +1,31 @@
+--- a/mods/src/game-mode/game-mode.c
++++ b/mods/src/game-mode/game-mode.c
+@@ -46,6 +46,14 @@ static unsigned char *Minecraft_getCreator_injection(unsigned char *minecraft) {
+     }
+ }
+ 
++// Set Game Mode In StartGamePacket To Creative
++static void StartGamePacket_read_injection(unsigned char *packet, unsigned char *bit_stream) {
++    // Call Original Method
++    (*StartGamePacket_read)(packet, bit_stream);
++    // Change Game Mode
++    *(int32_t *) (packet + StartGamePacket_game_mode_property_offset) = 1;
++}
++
+ // Init
+ void init_game_mode() {
+     // Dynamic Game Mode Switching
+@@ -72,4 +80,13 @@ void init_game_mode() {
+         unsigned char server_patch[4] = {0x0f, 0x00, 0x00, 0xea}; // "b 0x6dcb4"
+         patch((void *) 0x6dc70, server_patch);
+     }
++
++    // Set Game Mode In StartGamePacket To Creative
++    patch_address(StartGamePacket_read_vtable_addr, (void *) StartGamePacket_read_injection);
++    // Allow Dropping Items In Creative Mode
++    unsigned char drop_patch[4] = {0x00, 0xf0, 0x20, 0xe3};
++    patch((void *) 0x27808, drop_patch);
++    // When Dropping Items In Creative Mode, Drop A Stack of 255 Instead Of 5
++    unsigned char count_patch[4] = {0xff, 0xc0, 0xa0, 0xe3};
++    patch((void *) 0x8e104, count_patch);
+ }
