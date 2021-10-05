@@ -1,0 +1,19 @@
+{
+  "name": "polyfill",
+  "version": "1.0.0",
+  "description": "Provides polyfills necessary for a full ES2015+ environment",
+  "author": "Sebastian McKenzie <sebmck@gmail.com>",
+  "homepage": "https://babeljs.io/",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "dependencies": {
+    "core-js": "3",
+    "regenerator-runtime": "latest"
+  },
+  "devDependencies": {
+    "browserify": "latest",
+    "bundle-collapser": "latest",
+    "derequire": "latest",
+    "uglify-js": "latest"
+  }
+}
