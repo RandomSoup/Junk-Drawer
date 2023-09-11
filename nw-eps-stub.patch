@@ -1,0 +1,470 @@
+commit 63824ea6ab969d477dc5bdc847305304b00975f3
+Author: Álvaro Torralba <donfrutosgomez@gmail.com>
+Date:   Mon Sep 11 20:14:27 2023 -0300
+
+    Add stub target.
+
+diff --git a/build/platform.stub.mak b/build/platform.stub.mak
+new file mode 100644
+index 0000000000..882fd2192d
+--- /dev/null
++++ b/build/platform.stub.mak
+@@ -0,0 +1,13 @@
++USE_LIBA = 0
++EPSILON_GETOPT = 1
++
++TARGET ?= $(HOST)
++
++BUILD_DIR := $(BUILD_DIR)/$(PLATFORM)
++
++# STUB: replace this, probably
++TOOLCHAIN = host-gcc
++EXE = out
++
++EPSILON_TELEMETRY ?= 0
++TERMS_OF_USE ?= 0
+diff --git a/ion/src/stub/Makefile b/ion/src/stub/Makefile
+new file mode 100644
+index 0000000000..6c81fa11a2
+--- /dev/null
++++ b/ion/src/stub/Makefile
+@@ -0,0 +1,31 @@
++ion_src += $(addprefix ion/src/shared/, \
++  collect_registers.cpp \
++)
++
++ion_src += $(addprefix ion/src/shared/dummy/, \
++  authentication.cpp \
++  backlight.cpp \
++  battery.cpp \
++  display.cpp \
++  external_apps.cpp \
++  fcc_id.cpp \
++  led.cpp \
++  platform_info.cpp \
++  post_and_hardware_tests.cpp \
++  power.cpp \
++  reset.h \
++  stack.cpp \
++  usb.cpp \
++)
++
++ion_src += $(addprefix ion/src/stub/, \
++  circuit_breaker.cpp \
++  clipboard.cpp \
++  console.cpp \
++  display.cpp \
++  events.cpp \
++  keyboard.cpp \
++  persisting_bytes.cpp \
++  stub.cpp \
++  timing.cpp \
++)
+diff --git a/ion/src/stub/circuit_breaker.cpp b/ion/src/stub/circuit_breaker.cpp
+new file mode 100644
+index 0000000000..b1d77b99db
+--- /dev/null
++++ b/ion/src/stub/circuit_breaker.cpp
+@@ -0,0 +1,84 @@
++/* STUB: copied from simulator */
++#include <assert.h>
++#include <ion/circuit_breaker.h>
++
++namespace Ion {
++namespace CircuitBreaker {
++
++Status sStatus = Status::Interrupted;
++constexpr static int k_numberOfCheckpointTypes =
++    static_cast<uint8_t>(CheckpointType::NumberOfCheckpoints);  // 3
++bool sCheckpointsSet[k_numberOfCheckpointTypes] = {false, false, false};
++jmp_buf sBuffers[k_numberOfCheckpointTypes];
++jmp_buf sDummyBuffer;
++
++int sNumberOfLocks = 0;
++bool sLoadCheckpointInterrupted = false;
++CheckpointType sLockedCheckpointType;
++
++Status status() { return sStatus; }
++
++bool hasCheckpoint(CheckpointType type) {
++  return sCheckpointsSet[static_cast<uint8_t>(type)];
++}
++
++void unsetLowerCheckpoints(CheckpointType type) {
++  int lowerTypeIndex = static_cast<int>(type) + 1;
++  if (lowerTypeIndex >= k_numberOfCheckpointTypes) {
++    return;
++  }
++  CheckpointType lowerType = static_cast<CheckpointType>(lowerTypeIndex);
++  /* type just need to be incremented since unsetCheckpoint will call
++   * unsetLowerCheckpoints again. */
++  unsetCheckpoint(static_cast<CheckpointType>(lowerType));
++}
++
++void unsetCheckpoint(CheckpointType type) {
++  unsetLowerCheckpoints(type);
++  sCheckpointsSet[static_cast<uint8_t>(type)] = false;
++}
++
++void loadCheckpoint(CheckpointType type) {
++  assert(hasCheckpoint(type));
++  if (sNumberOfLocks > 0) {
++    if (!sLoadCheckpointInterrupted) {
++      sLoadCheckpointInterrupted = true;
++      sLockedCheckpointType = type;
++    }
++    return;
++  }
++  sLoadCheckpointInterrupted = false;
++  sStatus = Status::Interrupted;
++  unsetLowerCheckpoints(type);
++  longjmp(sBuffers[static_cast<uint8_t>(type)], 1);
++}
++
++void lock() { sNumberOfLocks++; }
++
++void unlock() {
++  assert(sNumberOfLocks > 0);
++  sNumberOfLocks--;
++  if (sNumberOfLocks == 0 && sLoadCheckpointInterrupted) {
++    CircuitBreaker::loadCheckpoint(sLockedCheckpointType);
++  }
++}
++
++Status statusAfterSetjmp(int jmpStatus, CheckpointType type) {
++  if (jmpStatus == 0) {
++    if (hasCheckpoint(type)) {
++      return Status::Ignored;
++    }
++    sStatus = Status::Set;
++    sCheckpointsSet[static_cast<uint8_t>(type)] = true;
++  }
++  assert((sStatus == Status::Interrupted) == (jmpStatus != 0));
++  return sStatus;
++}
++
++jmp_buf* jmpbufForType(CheckpointType type) {
++  return hasCheckpoint(type) ? &sDummyBuffer
++                             : sBuffers + static_cast<uint8_t>(type);
++}
++
++}  // namespace CircuitBreaker
++}  // namespace Ion
+diff --git a/ion/src/stub/clipboard.cpp b/ion/src/stub/clipboard.cpp
+new file mode 100644
+index 0000000000..97bb062b34
+--- /dev/null
++++ b/ion/src/stub/clipboard.cpp
+@@ -0,0 +1,37 @@
++#include <stdio.h>
++#include <string.h>
++
++#include <ion/clipboard.h>
++
++#include "stub.h"
++
++namespace Ion {
++namespace Clipboard {
++
++static bool modified;
++/* STUB: Make sure to keep this NULL-terminated! */
++static char buff[BUFSIZ] = {0};
++
++void write(const char* text) {
++	Stub::strCopy(buff, text, sizeof(buff));
++	modified = true;
++}
++
++const char* read() {
++	if (!modified || !*buff) {
++		return nullptr;
++	}
++	modified = false;
++	return buff;
++}
++
++void sendBufferToSystemClipboard() {
++	/* STUB: copy buff into system clipboard */
++}
++
++void fetchSystemClipboardToBuffer() {
++	/* STUB: copy system clipboard into buff */
++	modified = true;
++}
++
++}}
+diff --git a/ion/src/stub/console.cpp b/ion/src/stub/console.cpp
+new file mode 100644
+index 0000000000..ad2b289377
+--- /dev/null
++++ b/ion/src/stub/console.cpp
+@@ -0,0 +1,25 @@
++#include <stdio.h>
++
++#include <ion/console.h>
++
++namespace Ion {
++namespace Console {
++
++static bool flushed = false;
++
++void writeChar(char c) {
++	putchar(c);
++	flushed = false;
++}
++
++bool clear() { return false; }
++char readChar() { return getchar(); }
++
++bool transmissionDone() {
++	if (!flushed) {
++		fflush(stdout);
++	}
++	return (flushed = true);
++}
++
++}}
+diff --git a/ion/src/stub/display.cpp b/ion/src/stub/display.cpp
+new file mode 100644
+index 0000000000..0c24e9df79
+--- /dev/null
++++ b/ion/src/stub/display.cpp
+@@ -0,0 +1,26 @@
++#include <ion/display.h>
++#include <kandinsky/framebuffer.h>
++
++namespace Ion {
++namespace Display {
++
++/* STUB: replace this dumb implementation with an appropriately
++ * accelerated one */
++static KDColor buff[Width * Height];
++static KDFrameBuffer fb = KDFrameBuffer(buff, KDSize(Width, Height));
++
++void pushRect(KDRect r, const KDColor* pixels) {
++	fb.pushRect(r, pixels);
++	/* STUB: draw framebuffer */
++}
++
++void pushRectUniform(KDRect r, KDColor c) {
++	fb.pushRectUniform(r, c);
++	/* STUB: draw framebuffer */
++}
++
++void pullRect(KDRect r, KDColor* pixels) { fb.pullRect(r, pixels); }
++
++void setScreenshotCallback(void (*)(void)) {}
++
++}}
+diff --git a/ion/src/stub/events.cpp b/ion/src/stub/events.cpp
+new file mode 100644
+index 0000000000..656f232dad
+--- /dev/null
++++ b/ion/src/stub/events.cpp
+@@ -0,0 +1,54 @@
++#include <ion/events.h>
++#include <ion/timing.h>
++#include <ion/keyboard.h>
++#include <ion/src/shared/events.h>
++#include <ion/src/shared/keyboard_queue.h>
++
++namespace Ion {
++namespace Events {
++
++bool handlePreemption(bool stalling) { return false; }
++void setPreemptiveKeyboardState(Keyboard::State s) {}
++void resetPreemptiveKeyboardState() {}
++
++Event getPlatformEvent() {
++	Event result = None;
++	/* STUB: get next native event and translate it for Ion */
++	return result;
++}
++
++void didPressNewKey() {}
++void openURL(const char* url) {}
++
++bool waitForInterruptingEvent(int maximumDelay, int* timeout) {
++	/* STUB: replace this stupidity (copied from simulator) with a
++	 * proper wait-for-interrupt routine */
++	Keyboard::scan();
++	maximumDelay = maximumDelay > 10 ? 10 : maximumDelay;
++	if (*timeout < maximumDelay) {
++		Timing::msleep(*timeout);
++		*timeout = 0;
++	} else {
++		Timing::msleep(maximumDelay);
++		*timeout -= maximumDelay;
++	}
++	return !Keyboard::Queue::sharedQueue()->isEmpty();
++}
++
++Event getEvent(int *timeout) { return sharedGetEvent(timeout); }
++
++size_t copyText(uint8_t eventId, char* buffer, size_t bufferSize) {
++	return sharedCopyText(eventId, buffer, bufferSize);
++}
++
++bool isDefined(uint8_t eventId) {
++	return sharedIsDefined(eventId);
++}
++
++void setSpinner(bool spinner) {}
++
++const char *Event::text() const {
++	return nullptr;
++}
++
++}}
+diff --git a/ion/src/stub/keyboard.cpp b/ion/src/stub/keyboard.cpp
+new file mode 100644
+index 0000000000..6ba398ee41
+--- /dev/null
++++ b/ion/src/stub/keyboard.cpp
+@@ -0,0 +1,19 @@
++#include <ion/keyboard.h>
++#include <ion/src/shared/keyboard.h>
++
++namespace Ion {
++namespace Keyboard {
++
++State scan() {
++	State state(0);
++	/* STUB: forEach(map(platformKeyboardState, ...), state.setKey) */
++	keyboardWasScanned(state);
++	return state;
++}
++
++State scanForInterruptionAndPopState() {
++	scan();
++	return popState();
++}
++
++}}
+diff --git a/ion/src/stub/persisting_bytes.cpp b/ion/src/stub/persisting_bytes.cpp
+new file mode 100644
+index 0000000000..dfe41c7237
+--- /dev/null
++++ b/ion/src/stub/persisting_bytes.cpp
+@@ -0,0 +1,13 @@
++#include <ion/persisting_bytes.h>
++
++/* STUB: this seems to be used for exam mode only. I don't get what is
++ * supposed to be "persisting" here */
++namespace Ion {
++namespace PersistingBytes {
++
++static PersistingBytesInt bytes;
++
++void write(PersistingBytesInt value) { bytes = value; }
++PersistingBytesInt read() { return bytes; }
++
++}}
+diff --git a/ion/src/stub/stub.cpp b/ion/src/stub/stub.cpp
+new file mode 100644
+index 0000000000..707fa7478e
+--- /dev/null
++++ b/ion/src/stub/stub.cpp
+@@ -0,0 +1,69 @@
++/* STUB: this file is a mess */
++
++#include <time.h>
++#include <stdint.h>
++#include <string.h>
++
++#include <ion.h>
++
++#include <ion/src/shared/init.h>
++#include <ion/src/stub/stub.h>
++
++namespace Ion {
++
++static uint32_t randState;
++
++static constexpr uint32_t FNV1A32_BASIS = 0x811c9dc5;
++static constexpr uint32_t FNV1A32_PRIME = 0x01000193;
++
++static inline uint32_t fnv1a32(uint32_t hash, uint8_t byte) {
++	return (hash ^ byte) * FNV1A32_PRIME;
++}
++
++uint32_t crc32Byte(const uint8_t* data, size_t length) {
++	uint32_t hash = FNV1A32_BASIS;
++	while (length--) {
++		hash = fnv1a32(hash, *data);
++		data++;
++	}
++	return hash;
++}
++
++uint32_t crc32Word(const uint32_t* data, size_t length) {
++	return crc32Byte(reinterpret_cast<const uint8_t*>(data), length * 4);
++}
++
++void init() {
++	const uint32_t t = time(NULL) & UINT32_MAX;
++	randState = crc32Word(&t, 1);
++}
++
++uint32_t random() {
++	return (randState = fnv1a32(randState, '1'));
++}
++
++const char* compilationFlags() { return "NA"; }
++const char* runningBootloader() { return "NA"; }
++
++/* STUB: you might wanna change this namespace, as well as related
++ * filenames and references. */
++namespace Stub {
++
++size_t strCopy(char* dst, const char* src, size_t dst_sz) {
++	size_t src_sz, cpy_sz;
++
++	dst_sz--;
++	src_sz = strlen(src);
++	cpy_sz = dst_sz > src_sz ? src_sz : dst_sz;
++
++	memcpy(dst, src, cpy_sz);
++	dst[cpy_sz] = 0x00;
++	return cpy_sz;
++}
++
++}}
++
++int main(int argc, char* argv[]) {
++	Ion::init();
++	ion_main(argc, argv);
++}
+diff --git a/ion/src/stub/stub.h b/ion/src/stub/stub.h
+new file mode 100644
+index 0000000000..58dc19316c
+--- /dev/null
++++ b/ion/src/stub/stub.h
+@@ -0,0 +1,8 @@
++#include <stddef.h>
++
++namespace Ion {
++namespace Stub {
++
++size_t strCopy(char* dst, const char* src, size_t dst_sz);
++
++}}
+diff --git a/ion/src/stub/timing.cpp b/ion/src/stub/timing.cpp
+new file mode 100644
+index 0000000000..f867b15b65
+--- /dev/null
++++ b/ion/src/stub/timing.cpp
+@@ -0,0 +1,13 @@
++#include <time.h>
++#include <unistd.h>
++
++#include <ion/timing.h>
++
++namespace Ion {
++namespace Timing {
++
++void usleep(uint32_t us) { usleep(us); }
++void msleep(uint32_t ms) { usleep(ms * 10); }
++uint64_t millis() { return time(NULL) * 10; }
++
++}}
