@@ -1,0 +1,22 @@
+diff --git a/src/text.c b/src/text.c
+index a3e899e7..d3eca19e 100644
+--- a/src/text.c
++++ b/src/text.c
+@@ -64,8 +64,15 @@ void do_tab(void)
+ #endif
+ #ifndef NANO_TINY
+ 	if (ISSET(TABS_TO_SPACES)) {
+-		char *spaces = nmalloc(tabsize + 1);
+-		size_t length = tabsize - (xplustabs() % tabsize);
++	    size_t length = tabsize - (xplustabs() % tabsize);
++	    if (openfile->current->prev) {
++	        size_t indent_len = indent_length(openfile->current->prev->data);
++	        size_t cur_indent_len = indent_length(openfile->current->data);
++	        if (cur_indent_len < indent_len) {
++                length = indent_len - cur_indent_len;
++	        }
++        }
++		char *spaces = nmalloc(length);
+ 
+ 		memset(spaces, ' ', length);
+ 		spaces[length] = '\0';
