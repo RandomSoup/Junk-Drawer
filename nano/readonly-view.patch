@@ -1,0 +1,16 @@
+diff --git a/src/files.c b/src/files.c
+index ceb9d85b..2862a5a7 100644
+--- a/src/files.c
++++ b/src/files.c
+@@ -836,8 +836,10 @@ void read_file(FILE *f, int fd, const char *filename, bool undoable)
+ 	/* Set the desired x position at the end of what was inserted. */
+ 	openfile->placewewant = xplustabs();
+ 
+-	if (!writable)
++	if (!writable) {
+ 		statusline(ALERT, _("File '%s' is unwritable"), filename);
++	    SET(VIEW_MODE);
++	}
+ 	else if ((ISSET(ZERO) || ISSET(MINIBAR)) && !(we_are_running && undoable))
+ 		;  /* No blurb for new buffers with --zero or --mini. */
+ #ifndef NANO_TINY

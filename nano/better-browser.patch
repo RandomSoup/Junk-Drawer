@@ -1,0 +1,118 @@
+diff --git a/src/browser.c b/src/browser.c
+index f12573a4..1d2b9a07 100644
+--- a/src/browser.c
++++ b/src/browser.c
+@@ -108,22 +108,24 @@ void read_the_list(const char *path, DIR *dir)
+ }
+ 
+ /* Reselect the given file or directory name, if it still exists. */
+-void reselect(const char *name)
++void reselect(const char *name, bool use_basepath)
+ {
+ 	size_t looking_at = 0;
+ 
+-	while (looking_at < list_length && strcmp(filelist[looking_at], name) != 0)
+-		looking_at++;
++	if (use_basepath)
++		while (looking_at < list_length && strcmp(tail(filelist[looking_at]), name) != 0)
++			looking_at++;
++	else
++		while (looking_at < list_length && strcmp(filelist[looking_at], name) != 0)
++			looking_at++;
+ 
+ 	/* If the sought name was found, select it; otherwise, just move
+ 	 * the highlight so that the changed selection will be noticed,
+ 	 * but make sure to stay within the current available range. */
+ 	if (looking_at < list_length)
+ 		selected = looking_at;
+-	else if (selected > list_length)
+-		selected = list_length - 1;
+ 	else
+-		--selected;
++		selected = list_length - 1;
+ }
+ 
+ /* Display at most a screenful of filenames from the gleaned filelist. */
+@@ -380,9 +382,10 @@ char *strip_last_component(const char *path)
+ 
+ /* Allow the user to browse through the directories in the filesystem,
+  * starting at the given path. */
++static char *present_name = NULL;
+ char *browse(char *path)
+ {
+-	char *present_name = NULL;
++    bool use_basepath = present_name != NULL;
+ 		/* The name of the currently selected file, or of the directory we
+ 		 * were in before backing up to "..". */
+ 	size_t old_selected;
+@@ -406,6 +409,7 @@ char *browse(char *path)
+ 		if (filelist == NULL) {
+ 			lastmessage = VACUUM;
+ 			free(present_name);
++			present_name = NULL;
+ 			free(path);
+ 			napms(1200);
+ 			return NULL;
+@@ -424,7 +428,8 @@ char *browse(char *path)
+ 	/* If something was selected before, reselect it;
+ 	 * otherwise, just select the first item (..). */
+ 	if (present_name != NULL) {
+-		reselect(present_name);
++		reselect(present_name, use_basepath);
++		use_basepath = FALSE;
+ 		free(present_name);
+ 		present_name = NULL;
+ 	} else
+@@ -660,8 +665,10 @@ char *browse(char *path)
+ #endif
+ 	}
+ 
+-	titlebar(NULL);
+-	edit_refresh();
++	if (openfile != NULL) {
++	    titlebar(NULL);
++    	edit_refresh();
++	}
+ 
+ 	free(path);
+ 
+@@ -679,6 +686,12 @@ char *browse_in(const char *inpath)
+ 	char *path = real_dir_from_tilde(inpath);
+ 	struct stat fileinfo;
+ 
++	/* Open the files relative to the open file*/
++	if (strcmp(path, "") == 0) {
++		path = free_and_assign(path, copy_of(openfile->filename));
++		present_name = copy_of(tail(openfile->filename));
++	}
++
+ 	/* If path is not a directory, try to strip a filename from it; if then
+ 	 * still not a directory, use the current working directory instead. */
+ 	if (stat(path, &fileinfo) == -1 || !S_ISDIR(fileinfo.st_mode)) {
+diff --git a/src/files.c b/src/files.c
+index fc30ad6f..ceb9d85b 100644
+--- a/src/files.c
++++ b/src/files.c
+@@ -407,13 +407,21 @@ bool open_buffer(const char *filename, bool new_one)
+ 
+ 	realname = real_dir_from_tilde(filename);
+ 
+-	/* Don't try to open directories, character files, or block files. */
+ 	if (*filename != '\0' && stat(realname, &fileinfo) == 0) {
++		/* Open directories in file browser */
+ 		if (S_ISDIR(fileinfo.st_mode)) {
++			char *chosen = browse_in(realname);
++			if (chosen != NULL) {
++			    bool ret = open_buffer(chosen, new_one);
++    			free(realname);
++    			free(chosen);
++    			return ret;
++			}
+ 			statusline(ALERT, _("\"%s\" is a directory"), realname);
+ 			free(realname);
+ 			return FALSE;
+ 		}
++ 		/* Don't try to open character files or block files. */
+ 		if (S_ISCHR(fileinfo.st_mode) || S_ISBLK(fileinfo.st_mode)) {
+ 			statusline(ALERT, _("\"%s\" is a device file"), realname);
+ 			free(realname);
