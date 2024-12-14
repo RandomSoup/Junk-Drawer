@@ -1,0 +1,24 @@
+--- nsnake-3.0.1/src/Game/Board.cpp
++++ nsnake-3.0.1/src/Game/Board.cpp
+@@ -9,8 +9,8 @@
+ int Board::medium_width  = 55;
+ int Board::medium_height = 14;
+ 
+-int Board::large_width  = 78;
+-int Board::large_height = 21;
++int Board::large_width  = 201;
++int Board::large_height = 52;
+ 
+ Board::Board(int width, int height, Style style):
+ 	style(style),
+--- nsnake-3.0.1/src/Game/Game.cpp
++++ nsnake-3.0.1/src/Game/Game.cpp
+@@ -114,7 +114,7 @@
+ 	//
+ 	// NOTE: It depends on the `currentScore` level name!
+ 	//       Do not initialize it before!
+-	this->layout = new LayoutGame(this, 80, 24);
++	this->layout = new LayoutGame(this, 203, 55);
+ 
+ 	// Creating the menu and adding each item
+ 	this->pauseMenu = new Menu(1,
